@@ -1,0 +1,37 @@
+{
+  "display": {
+    "title": "thestatic.tv Example Scene",
+    "description": "Example DCL scene with visitor tracking using @thestatic/dcl-sdk",
+    "navmapThumbnail": "images/scene-thumbnail.png",
+    "favicon": "favicon_asset"
+  },
+  "owner": "",
+  "contact": {
+    "name": "thestatic.tv",
+    "email": ""
+  },
+  "main": "bin/index.js",
+  "tags": ["thestatic", "visitor-tracking", "analytics"],
+  "scene": {
+    "parcels": ["0,0"],
+    "base": "0,0"
+  },
+  "spawnPoints": [
+    {
+      "name": "spawn1",
+      "default": true,
+      "position": {
+        "x": 8,
+        "y": 0,
+        "z": 8
+      },
+      "cameraTarget": {
+        "x": 8,
+        "y": 1,
+        "z": 4
+      }
+    }
+  ],
+  "requiredPermissions": [],
+  "featureToggles": {}
+}

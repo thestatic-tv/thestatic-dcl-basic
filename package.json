@@ -1,0 +1,22 @@
+{
+  "name": "thestatic-dcl-example",
+  "version": "1.0.0",
+  "description": "Example DCL scene with visitor tracking using @thestatic-tv/dcl-sdk",
+  "scripts": {
+    "build": "sdk-commands build --production",
+    "start": "sdk-commands start",
+    "deploy": "sdk-commands deploy",
+    "deploy:test": "sdk-commands deploy --target-content https://worlds-content-server.decentraland.org"
+  },
+  "dependencies": {
+    "@dcl/sdk": "^7.0.0",
+    "@thestatic-tv/dcl-sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@dcl/sdk-commands": "^7.0.0"
+  },
+  "prettier": {
+    "semi": false,
+    "singleQuote": true
+  }
+}
