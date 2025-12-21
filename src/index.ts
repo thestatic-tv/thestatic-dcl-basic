@@ -323,7 +323,7 @@ function updateStatus() {
   const isActive = staticTV.session.isSessionActive()
 
   // Update orb color
-  Material.createOrReplace(statusOrb, {
+  Material.setPbrMaterial(statusOrb, {
     albedoColor: isActive ? COLORS.green : COLORS.red,
     emissiveColor: isActive ? COLORS.greenGlow : COLORS.redGlow,
     emissiveIntensity: 3

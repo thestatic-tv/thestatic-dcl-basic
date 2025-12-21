@@ -1,7 +1,7 @@
 {
   "display": {
     "title": "thestatic.tv Example Scene",
-    "description": "Example DCL scene with visitor tracking using @thestatic/dcl-sdk",
+    "description": "Example DCL scene with visitor tracking using @thestatic-tv/dcl-sdk",
     "navmapThumbnail": "images/scene-thumbnail.png",
     "favicon": "favicon_asset"
   },
@@ -11,6 +11,7 @@
     "email": ""
   },
   "main": "bin/index.js",
+  "runtimeVersion": "7",
   "tags": ["thestatic", "visitor-tracking", "analytics"],
   "scene": {
     "parcels": ["0,0"],
