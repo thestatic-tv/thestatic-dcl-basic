@@ -9,9 +9,10 @@ A showcase Decentraland scene demonstrating visitor tracking with [@thestatic-tv
 
 - **Glowing Platform** - Cyan-accented floor with emissive edges
 - **Animated Cubes** - Floating, rotating cubes around the scene
-- **Live Status Indicator** - Real-time session tracking display
+- **Live Stats Panel** - Real-time visitor count display (left wall)
+- **Info Panel** - SDK features and free trial info (back wall)
+- **Status Indicator** - Session tracking orb that turns green when connected
 - **Corner Pillars** - Decorative pillars with glow caps
-- **Billboard Info** - Auto-facing info panel
 
 ## Quick Start
 
@@ -51,22 +52,21 @@ The scene will open in your browser. You should see:
 ## Scene Overview
 
 ```
-┌─────────────────────────────┐
-│  ○                       ○  │  ← Corner pillars with glow
-│                             │
-│     ╔═══════════════╗       │
-│     ║ thestatic.tv  ║       │  ← Welcome sign
-│     ║ Tracking...   ║       │
-│     ╚═══════════════╝       │
-│     ┌───────────────┐       │
-│     │ ● SESSION:... │       │  ← Status panel
-│     └───────────────┘       │
-│  ◇                       ◇  │  ← Floating cubes
-│         (spawn)             │
-│  ◇         ↓             ◇  │
-│                             │
-│  ○                       ○  │
-└─────────────────────────────┘
+┌─────────────────────────────────┐
+│  ○                           ○  │  ← Corner pillars
+│                                 │
+│      ╔═════════════════════╗    │  ← Info panel (back wall)
+│      ║  KNOW YOUR AUDIENCE ║    │     "FREE TRIAL >> thestatic.tv"
+│      ╚═════════════════════╝    │
+│                                 │
+│ ┌────┐                          │
+│ │STATS│  ◇              ◇       │  ← Stats panel (left wall)
+│ │ 5  │       ● ← status orb     │     Shows live visitor count
+│ └────┘  ◇      (spawn)     ◇    │
+│                  ↓              │
+│                                 │
+│  ○                           ○  │
+└─────────────────────────────────┘
 ```
 
 ## SDK Usage
@@ -180,7 +180,6 @@ const cubePositions = [
 
 - **SDK Package**: [npmjs.com/package/@thestatic-tv/dcl-sdk](https://npmjs.com/package/@thestatic-tv/dcl-sdk)
 - **Dashboard**: [thestatic.tv/dashboard](https://thestatic.tv/dashboard)
-- **SDK Source**: [github.com/thestatic-tv/dcl-sdk](https://github.com/thestatic-tv/dcl-sdk)
 
 ## License
 

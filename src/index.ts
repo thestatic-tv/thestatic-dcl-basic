@@ -13,22 +13,43 @@ import {
   MeshCollider,
   Material,
   TextShape,
-  Billboard,
-  BillboardMode,
-  Entity
+  Entity,
+  pointerEventsSystem,
+  InputAction
 } from '@dcl/sdk/ecs'
 import { Color4, Vector3, Quaternion } from '@dcl/sdk/math'
+import { getPlayer } from '@dcl/sdk/players'
+import { openExternalUrl } from '~system/RestrictedActions'
 import { StaticTVClient } from '@thestatic-tv/dcl-sdk'
+
+// ============================================
+// LINKS
+// ============================================
+const LINKS = {
+  dashboard: 'https://thestatic.tv/dashboard',
+  github: 'https://github.com/thestatic-tv/thestatic-dcl-starter'
+}
 
 // ============================================
 // CONFIGURATION - Replace with your scene key
 // ============================================
-const SCENE_API_KEY = 'dcls_your_scene_key_here'
+const SCENE_API_KEY = 'dcls_YOUR_KEY_HERE' // Replace with your key from thestatic.tv/dashboard
+
+// Set to true for local development, false for production
+const IS_LOCAL = true
+
+// Get player data from DCL
+const player = getPlayer()
 
 // Initialize the StaticTV client
 const staticTV = new StaticTVClient({
   apiKey: SCENE_API_KEY,
-  debug: true // Set to false in production
+  baseUrl: IS_LOCAL ? 'http://localhost:3000/api/v1/dcl' : undefined,
+  debug: true, // Set to false in production
+  player: {
+    wallet: player?.userId,
+    name: player?.name
+  }
 })
 
 // ============================================
@@ -52,44 +73,126 @@ const COLORS = {
 // SCENE SETUP
 // ============================================
 
-// Main floor platform
-const floor = engine.addEntity()
-Transform.create(floor, {
-  position: Vector3.create(8, 0, 8),
-  scale: Vector3.create(14, 0.2, 14)
+// Main floor collider (invisible, for walking)
+const floorCollider = engine.addEntity()
+Transform.create(floorCollider, {
+  position: Vector3.create(8, -0.1, 8),
+  scale: Vector3.create(16, 0.2, 16)
 })
-MeshRenderer.setBox(floor)
-MeshCollider.setBox(floor)
-Material.setPbrMaterial(floor, {
-  albedoColor: COLORS.floor,
-  metallic: 0.8,
-  roughness: 0.2
+MeshCollider.setBox(floorCollider)
+
+// Grid of dark tiles
+const TILE_SIZE = 1.9
+const GAP = 0.1
+const GRID_START = 1
+const GRID_COUNT = 7
+
+for (let row = 0; row < GRID_COUNT; row++) {
+  for (let col = 0; col < GRID_COUNT; col++) {
+    const tile = engine.addEntity()
+    const x = GRID_START + col * (TILE_SIZE + GAP) + TILE_SIZE / 2
+    const z = GRID_START + row * (TILE_SIZE + GAP) + TILE_SIZE / 2
+
+    Transform.create(tile, {
+      position: Vector3.create(x, 0.05, z),
+      scale: Vector3.create(TILE_SIZE, 0.1, TILE_SIZE)
+    })
+    MeshRenderer.setBox(tile)
+    Material.setPbrMaterial(tile, {
+      albedoColor: COLORS.darkPanel,
+      metallic: 0.8,
+      roughness: 0.2
+    })
+  }
+}
+
+// Glowing grid lines (horizontal) - between tiles
+const LINE_HEIGHT = 0.08
+for (let i = 0; i <= GRID_COUNT; i++) {
+  const lineZ = GRID_START + i * (TILE_SIZE + GAP) - GAP / 2
+  const hLine = engine.addEntity()
+  Transform.create(hLine, {
+    position: Vector3.create(8, LINE_HEIGHT / 2, lineZ),
+    scale: Vector3.create(14, LINE_HEIGHT, GAP)
+  })
+  MeshRenderer.setBox(hLine)
+  Material.setPbrMaterial(hLine, {
+    albedoColor: COLORS.cyan,
+    emissiveColor: COLORS.cyan,
+    emissiveIntensity: 3
+  })
+}
+
+// Glowing grid lines (vertical) - between tiles
+for (let i = 0; i <= GRID_COUNT; i++) {
+  const lineX = GRID_START + i * (TILE_SIZE + GAP) - GAP / 2
+  const vLine = engine.addEntity()
+  Transform.create(vLine, {
+    position: Vector3.create(lineX, LINE_HEIGHT / 2, 8),
+    scale: Vector3.create(GAP, LINE_HEIGHT, 14)
+  })
+  MeshRenderer.setBox(vLine)
+  Material.setPbrMaterial(vLine, {
+    albedoColor: COLORS.cyan,
+    emissiveColor: COLORS.cyan,
+    emissiveIntensity: 3
+  })
+}
+
+// Outer edge border (4 separate pieces to make a frame)
+const EDGE_WIDTH = 0.15
+const EDGE_LENGTH = 15
+
+// North edge
+const edgeN = engine.addEntity()
+Transform.create(edgeN, {
+  position: Vector3.create(8, 0.06, 15),
+  scale: Vector3.create(EDGE_LENGTH, 0.12, EDGE_WIDTH)
+})
+MeshRenderer.setBox(edgeN)
+Material.setPbrMaterial(edgeN, {
+  albedoColor: COLORS.cyan,
+  emissiveColor: COLORS.cyan,
+  emissiveIntensity: 4
 })
 
-// Glowing edge ring
-const edgeRing = engine.addEntity()
-Transform.create(edgeRing, {
-  position: Vector3.create(8, 0.15, 8),
-  scale: Vector3.create(14.5, 0.05, 14.5)
+// South edge
+const edgeS = engine.addEntity()
+Transform.create(edgeS, {
+  position: Vector3.create(8, 0.06, 1),
+  scale: Vector3.create(EDGE_LENGTH, 0.12, EDGE_WIDTH)
 })
-MeshRenderer.setBox(edgeRing)
-Material.setPbrMaterial(edgeRing, {
+MeshRenderer.setBox(edgeS)
+Material.setPbrMaterial(edgeS, {
   albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyanGlow,
-  emissiveIntensity: 3
+  emissiveColor: COLORS.cyan,
+  emissiveIntensity: 4
 })
 
-// Inner accent ring
-const innerRing = engine.addEntity()
-Transform.create(innerRing, {
-  position: Vector3.create(8, 0.12, 8),
-  scale: Vector3.create(10, 0.03, 10)
+// East edge
+const edgeE = engine.addEntity()
+Transform.create(edgeE, {
+  position: Vector3.create(15, 0.06, 8),
+  scale: Vector3.create(EDGE_WIDTH, 0.12, EDGE_LENGTH)
 })
-MeshRenderer.setBox(innerRing)
-Material.setPbrMaterial(innerRing, {
+MeshRenderer.setBox(edgeE)
+Material.setPbrMaterial(edgeE, {
   albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyanGlow,
-  emissiveIntensity: 1.5
+  emissiveColor: COLORS.cyan,
+  emissiveIntensity: 4
+})
+
+// West edge
+const edgeW = engine.addEntity()
+Transform.create(edgeW, {
+  position: Vector3.create(1, 0.06, 8),
+  scale: Vector3.create(EDGE_WIDTH, 0.12, EDGE_LENGTH)
+})
+MeshRenderer.setBox(edgeW)
+Material.setPbrMaterial(edgeW, {
+  albedoColor: COLORS.cyan,
+  emissiveColor: COLORS.cyan,
+  emissiveIntensity: 4
 })
 
 // ============================================
@@ -103,6 +206,7 @@ Transform.create(signBack, {
   scale: Vector3.create(8, 3, 0.15)
 })
 MeshRenderer.setBox(signBack)
+MeshCollider.setBox(signBack)
 Material.setPbrMaterial(signBack, {
   albedoColor: COLORS.darkPanel,
   metallic: 0.9,
@@ -125,23 +229,27 @@ Material.setPbrMaterial(signFrame, {
 // Main title text
 const titleText = engine.addEntity()
 Transform.create(titleText, {
-  position: Vector3.create(8, 4.2, 1.85)
+  position: Vector3.create(8, 4.2, 2.2),
+  rotation: Quaternion.fromEulerDegrees(0, 180, 0)
 })
 TextShape.create(titleText, {
   text: 'thestatic.tv',
   fontSize: 5,
-  textColor: COLORS.cyan
+  textColor: COLORS.cyan,
+  width: 10
 })
 
 // Subtitle text
 const subtitleText = engine.addEntity()
 Transform.create(subtitleText, {
-  position: Vector3.create(8, 3.2, 1.85)
+  position: Vector3.create(8, 3.2, 2.2),
+  rotation: Quaternion.fromEulerDegrees(0, 180, 0)
 })
 TextShape.create(subtitleText, {
   text: 'Visitor Tracking Active',
   fontSize: 2,
-  textColor: COLORS.white
+  textColor: COLORS.white,
+  width: 10
 })
 
 // ============================================
@@ -155,6 +263,7 @@ Transform.create(statusPanel, {
   scale: Vector3.create(4, 1.2, 0.1)
 })
 MeshRenderer.setBox(statusPanel)
+MeshCollider.setBox(statusPanel)
 Material.setPbrMaterial(statusPanel, {
   albedoColor: COLORS.darkPanel,
   metallic: 0.8,
@@ -164,7 +273,7 @@ Material.setPbrMaterial(statusPanel, {
 // Status indicator orb
 const statusOrb = engine.addEntity()
 Transform.create(statusOrb, {
-  position: Vector3.create(6.5, 1.8, 2.4),
+  position: Vector3.create(9.5, 2, 2.6),
   scale: Vector3.create(0.25, 0.25, 0.25)
 })
 MeshRenderer.setSphere(statusOrb)
@@ -172,12 +281,27 @@ MeshRenderer.setSphere(statusOrb)
 // Status text
 const statusText = engine.addEntity()
 Transform.create(statusText, {
-  position: Vector3.create(8.2, 1.8, 2.4)
+  position: Vector3.create(8.2, 2, 2.6),
+  rotation: Quaternion.fromEulerDegrees(0, 180, 0)
 })
 TextShape.create(statusText, {
   text: 'SESSION: CONNECTING...',
   fontSize: 1.5,
-  textColor: COLORS.yellow
+  textColor: COLORS.yellow,
+  width: 6
+})
+
+// Session timer text
+const timerText = engine.addEntity()
+Transform.create(timerText, {
+  position: Vector3.create(8.2, 1.5, 2.6),
+  rotation: Quaternion.fromEulerDegrees(0, 180, 0)
+})
+TextShape.create(timerText, {
+  text: 'TIME: 00:00',
+  fontSize: 1.2,
+  textColor: COLORS.white,
+  width: 6
 })
 
 // ============================================
@@ -200,11 +324,10 @@ const cubePositions = [
   { x: 13, z: 3 },
   { x: 3, z: 13 },
   { x: 13, z: 13 },
-  { x: 2, z: 8 },
   { x: 14, z: 8 }
 ]
 
-cubePositions.forEach((pos, i) => {
+cubePositions.forEach((pos) => {
   const cube = engine.addEntity()
   const baseY = 2 + Math.random() * 2
 
@@ -250,6 +373,7 @@ pillarPositions.forEach(pos => {
     scale: Vector3.create(0.3, 3, 0.3)
   })
   MeshRenderer.setBox(pillar)
+  MeshCollider.setBox(pillar)
   Material.setPbrMaterial(pillar, {
     albedoColor: COLORS.darkPanel,
     metallic: 0.9,
@@ -271,19 +395,237 @@ pillarPositions.forEach(pos => {
 })
 
 // ============================================
-// INFO DISPLAY
+// INFO DISPLAY (Billboard with background)
 // ============================================
 
-// Billboard info panel
-const infoPanel = engine.addEntity()
-Transform.create(infoPanel, {
-  position: Vector3.create(8, 1, 12)
+// Info panel background
+const infoPanelBack = engine.addEntity()
+Transform.create(infoPanelBack, {
+  position: Vector3.create(8, 2.5, 14),
+  scale: Vector3.create(6, 4, 0.1)
 })
-Billboard.create(infoPanel, { billboardMode: BillboardMode.BM_Y })
-TextShape.create(infoPanel, {
-  text: '--- SDK FEATURES ---\n\nSession Tracking\nVisitor Analytics\nReal-time Metrics\n\nGet your key at:\nthestatic.tv/dashboard',
+MeshRenderer.setBox(infoPanelBack)
+MeshCollider.setBox(infoPanelBack)
+Material.setPbrMaterial(infoPanelBack, {
+  albedoColor: COLORS.darkPanel,
+  metallic: 0.8,
+  roughness: 0.2
+})
+
+// Info panel frame (behind the black panel)
+const infoPanelFrame = engine.addEntity()
+Transform.create(infoPanelFrame, {
+  position: Vector3.create(8, 2.5, 14.1),
+  scale: Vector3.create(6.2, 4.2, 0.05)
+})
+MeshRenderer.setBox(infoPanelFrame)
+Material.setPbrMaterial(infoPanelFrame, {
+  albedoColor: COLORS.cyan,
+  emissiveColor: COLORS.cyanGlow,
+  emissiveIntensity: 2
+})
+
+// Info title
+const infoTitle = engine.addEntity()
+Transform.create(infoTitle, {
+  position: Vector3.create(8, 4, 13.8),
+  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+})
+TextShape.create(infoTitle, {
+  text: 'KNOW YOUR AUDIENCE',
+  fontSize: 2.5,
+  textColor: COLORS.cyan,
+  width: 20,
+  height: 2
+})
+
+// Info content
+const infoContent = engine.addEntity()
+Transform.create(infoContent, {
+  position: Vector3.create(8, 2.5, 13.8),
+  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+})
+TextShape.create(infoContent, {
+  text: 'See who visits your scene LIVE\nTrack new vs returning visitors\nMeasure engagement & dwell time\nAll data in your dashboard',
+  fontSize: 1.6,
+  textColor: COLORS.white,
+  width: 20,
+  height: 4
+})
+
+// Info footer
+const infoFooter = engine.addEntity()
+Transform.create(infoFooter, {
+  position: Vector3.create(8, 1.2, 13.8),
+  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+})
+TextShape.create(infoFooter, {
+  text: 'Click buttons below to get started!',
+  fontSize: 1.4,
+  textColor: COLORS.white,
+  width: 20,
+  height: 2
+})
+
+// ============================================
+// CLICKABLE LINK BUTTONS
+// ============================================
+
+// Dashboard button (left)
+const dashboardButton = engine.addEntity()
+Transform.create(dashboardButton, {
+  position: Vector3.create(6.5, 0.6, 13.85),
+  scale: Vector3.create(2.5, 0.6, 0.1)
+})
+MeshRenderer.setBox(dashboardButton)
+MeshCollider.setBox(dashboardButton)
+Material.setPbrMaterial(dashboardButton, {
+  albedoColor: COLORS.green,
+  emissiveColor: COLORS.greenGlow,
+  emissiveIntensity: 2
+})
+
+const dashboardButtonText = engine.addEntity()
+Transform.create(dashboardButtonText, {
+  position: Vector3.create(6.5, 0.6, 13.7),
+  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+})
+TextShape.create(dashboardButtonText, {
+  text: 'FREE TRIAL',
   fontSize: 1.5,
-  textColor: COLORS.cyan
+  textColor: COLORS.darkPanel,
+  width: 10,
+  height: 2
+})
+
+pointerEventsSystem.onPointerDown(
+  { entity: dashboardButton, opts: { button: InputAction.IA_POINTER, hoverText: 'Open thestatic.tv' } },
+  () => {
+    openExternalUrl({ url: LINKS.dashboard })
+  }
+)
+
+// GitHub button (right)
+const githubButton = engine.addEntity()
+Transform.create(githubButton, {
+  position: Vector3.create(9.5, 0.6, 13.85),
+  scale: Vector3.create(2.5, 0.6, 0.1)
+})
+MeshRenderer.setBox(githubButton)
+MeshCollider.setBox(githubButton)
+Material.setPbrMaterial(githubButton, {
+  albedoColor: COLORS.cyan,
+  emissiveColor: COLORS.cyanGlow,
+  emissiveIntensity: 2
+})
+
+const githubButtonText = engine.addEntity()
+Transform.create(githubButtonText, {
+  position: Vector3.create(9.5, 0.6, 13.7),
+  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+})
+TextShape.create(githubButtonText, {
+  text: 'GET CODE',
+  fontSize: 1.5,
+  textColor: COLORS.darkPanel,
+  width: 10,
+  height: 2
+})
+
+pointerEventsSystem.onPointerDown(
+  { entity: githubButton, opts: { button: InputAction.IA_POINTER, hoverText: 'View on GitHub' } },
+  () => {
+    openExternalUrl({ url: LINKS.github })
+  }
+)
+
+// ============================================
+// STATS PANEL (Left side)
+// ============================================
+
+// Stats panel background
+const statsPanelBack = engine.addEntity()
+Transform.create(statsPanelBack, {
+  position: Vector3.create(2, 2.5, 8),
+  scale: Vector3.create(0.1, 3, 4),
+  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+})
+MeshRenderer.setBox(statsPanelBack)
+MeshCollider.setBox(statsPanelBack)
+Material.setPbrMaterial(statsPanelBack, {
+  albedoColor: COLORS.darkPanel,
+  metallic: 0.8,
+  roughness: 0.2
+})
+
+// Stats panel frame
+const statsPanelFrame = engine.addEntity()
+Transform.create(statsPanelFrame, {
+  position: Vector3.create(1.9, 2.5, 8),
+  scale: Vector3.create(0.05, 3.2, 4.2),
+  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+})
+MeshRenderer.setBox(statsPanelFrame)
+Material.setPbrMaterial(statsPanelFrame, {
+  albedoColor: COLORS.cyan,
+  emissiveColor: COLORS.cyanGlow,
+  emissiveIntensity: 2
+})
+
+// Stats title
+const statsTitle = engine.addEntity()
+Transform.create(statsTitle, {
+  position: Vector3.create(2.2, 3.5, 8),
+  rotation: Quaternion.fromEulerDegrees(0, 270, 0)
+})
+TextShape.create(statsTitle, {
+  text: 'TODAY\'S STATS',
+  fontSize: 2,
+  textColor: COLORS.cyan,
+  width: 20,
+  height: 2
+})
+
+// Visitors count text
+const visitorsText = engine.addEntity()
+Transform.create(visitorsText, {
+  position: Vector3.create(2.2, 2.8, 8),
+  rotation: Quaternion.fromEulerDegrees(0, 270, 0)
+})
+TextShape.create(visitorsText, {
+  text: 'Visitors: --',
+  fontSize: 1.8,
+  textColor: COLORS.white,
+  width: 20,
+  height: 2
+})
+
+// Sessions count text
+const sessionsText = engine.addEntity()
+Transform.create(sessionsText, {
+  position: Vector3.create(2.2, 2.2, 8),
+  rotation: Quaternion.fromEulerDegrees(0, 270, 0)
+})
+TextShape.create(sessionsText, {
+  text: 'Sessions: --',
+  fontSize: 1.8,
+  textColor: COLORS.white,
+  width: 20,
+  height: 2
+})
+
+// Your visitor number text
+const visitorNumText = engine.addEntity()
+Transform.create(visitorNumText, {
+  position: Vector3.create(2.2, 1.5, 8),
+  rotation: Quaternion.fromEulerDegrees(0, 270, 0)
+})
+TextShape.create(visitorNumText, {
+  text: 'You are visitor #--',
+  fontSize: 1.5,
+  textColor: COLORS.green,
+  width: 20,
+  height: 2
 })
 
 // ============================================
@@ -291,9 +633,18 @@ TextShape.create(infoPanel, {
 // ============================================
 
 let time = 0
+let sessionTime = 0
+let lastTimerUpdate = 0
+let lastStatsFetch = 0
+let statsFetched = false
 
 engine.addSystem((dt: number) => {
   time += dt
+
+  // Track session time when active
+  if (staticTV.session.isSessionActive()) {
+    sessionTime += dt
+  }
 
   // Animate floating cubes
   floatingCubes.forEach(cube => {
@@ -311,8 +662,19 @@ engine.addSystem((dt: number) => {
     )
   })
 
-  // Update status indicator
-  updateStatus()
+  // Update status and timer (throttle to every 0.5 seconds)
+  if (time - lastTimerUpdate > 0.5) {
+    lastTimerUpdate = time
+    updateStatus()
+    updateTimer()
+  }
+
+  // Fetch stats once session is active, then every 30 seconds
+  if (staticTV.session.isSessionActive() && (time - lastStatsFetch > 30 || !statsFetched)) {
+    lastStatsFetch = time
+    statsFetched = true
+    fetchAndDisplayStats()
+  }
 })
 
 // ============================================
@@ -333,6 +695,45 @@ function updateStatus() {
   const mutableText = TextShape.getMutable(statusText)
   mutableText.text = isActive ? 'SESSION: ACTIVE' : 'SESSION: INACTIVE'
   mutableText.textColor = isActive ? COLORS.green : COLORS.red
+}
+
+function updateTimer() {
+  const minutes = Math.floor(sessionTime / 60)
+  const seconds = Math.floor(sessionTime % 60)
+  const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+
+  const mutableTimer = TextShape.getMutable(timerText)
+  mutableTimer.text = `TIME: ${timeStr}`
+}
+
+async function fetchAndDisplayStats() {
+  try {
+    const stats = await staticTV.session.getStats()
+    if (stats) {
+      // Update visitors text
+      const mutableVisitors = TextShape.getMutable(visitorsText)
+      mutableVisitors.text = `Visitors: ${stats.uniqueVisitors}`
+
+      // Update sessions text
+      const mutableSessions = TextShape.getMutable(sessionsText)
+      mutableSessions.text = `Sessions: ${stats.totalSessions}`
+
+      // Update visitor number
+      const mutableVisitorNum = TextShape.getMutable(visitorNumText)
+      if (stats.visitorNumber) {
+        mutableVisitorNum.text = `You are visitor #${stats.visitorNumber}`
+        mutableVisitorNum.textColor = COLORS.green
+      } else if (stats.isFirstVisitor) {
+        mutableVisitorNum.text = 'You are the first visitor!'
+        mutableVisitorNum.textColor = COLORS.cyan
+      } else {
+        mutableVisitorNum.text = 'Welcome!'
+        mutableVisitorNum.textColor = COLORS.white
+      }
+    }
+  } catch (error) {
+    console.log('[thestatic.tv] Failed to fetch stats')
+  }
 }
 
 // ============================================
