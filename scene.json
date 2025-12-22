@@ -8,7 +8,7 @@
   "owner": "",
   "contact": {
     "name": "thestatic.tv",
-    "email": ""
+    "email": "contact@thestatic.tv"
   },
   "main": "bin/index.js",
   "runtimeVersion": "7",
