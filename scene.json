@@ -1,38 +1,51 @@
 {
   "display": {
-    "title": "thestatic.tv Example Scene",
-    "description": "Example DCL scene with visitor tracking using @thestatic-tv/dcl-sdk",
+    "title": "TheStatic.tv SDK Example",
+    "description": "Starter template for integrating @thestatic-tv/dcl-sdk. Learn how to add streaming video, channel guide, real-time chat, and visitor analytics to your Decentraland scene.",
     "navmapThumbnail": "images/scene-thumbnail.png",
     "favicon": "favicon_asset"
   },
   "owner": "",
   "contact": {
-    "name": "thestatic.tv",
+    "name": "TheStatic.tv",
     "email": "contact@thestatic.tv"
   },
   "main": "bin/index.js",
   "runtimeVersion": "7",
-  "tags": ["thestatic", "visitor-tracking", "analytics"],
+  "tags": [
+    "thestatic",
+    "sdk-example",
+    "streaming",
+    "video",
+    "analytics",
+    "visitor-tracking",
+    "guide",
+    "chat",
+    "tutorial",
+    "starter-template"
+  ],
   "scene": {
     "parcels": ["0,0"],
     "base": "0,0"
   },
   "spawnPoints": [
     {
-      "name": "spawn1",
+      "name": "main",
       "default": true,
       "position": {
         "x": 8,
-        "y": 0,
-        "z": 8
+        "y": 0.1,
+        "z": 12
       },
       "cameraTarget": {
         "x": 8,
-        "y": 1,
+        "y": 2,
         "z": 4
       }
     }
   ],
-  "requiredPermissions": [],
+  "requiredPermissions": [
+    "ALLOW_TO_MOVE_PLAYER_INSIDE_SCENE"
+  ],
   "featureToggles": {}
 }

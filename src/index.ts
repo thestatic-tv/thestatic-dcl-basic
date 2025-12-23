@@ -1,15 +1,26 @@
 /**
- * thestatic.tv DCL SDK Example Scene
+ * ============================================================================
+ * thestatic.tv DCL SDK - STARTER EXAMPLE
+ * ============================================================================
  *
- * A showcase scene demonstrating the @thestatic-tv/dcl-sdk features:
- * - Visitor tracking (Lite & Full)
- * - Guide UI with channel browser (Full only)
- * - Chat UI with real-time messaging (Full only)
+ * This example shows how to integrate @thestatic-tv/dcl-sdk into your scene.
  *
- * Get your key at: https://thestatic.tv/dashboard
- * - Scene key (dcls_): Visitor tracking only
- * - Channel key (dclk_): Full features including Guide & Chat UI
+ * WHAT'S REQUIRED FOR SDK (marked with "// >>> REQUIRED"):
+ *   1. Import StaticTVClient and GuideVideo
+ *   2. Create a video screen entity
+ *   3. Handle video selection callback
+ *   4. Initialize the StaticTV client with your API key
+ *   5. Initialize UI modules
+ *   6. Render UI components with ReactEcsRenderer
+ *
+ * WHAT'S DEMO ONLY (marked with "// --- DEMO"):
+ *   Everything else! The fancy scene, animations, stats panel, etc.
+ *   You don't need any of that - integrate the SDK into YOUR scene.
+ *
+ * Get your API key at: https://thestatic.tv/dashboard
+ * Documentation: https://github.com/thestatic-tv/dcl-sdk
  */
+
 import {
   engine,
   Transform,
@@ -17,116 +28,294 @@ import {
   MeshCollider,
   Material,
   TextShape,
-  Entity,
   pointerEventsSystem,
-  InputAction
+  InputAction,
+  VideoPlayer
 } from '@dcl/sdk/ecs'
 import { Color4, Vector3, Quaternion } from '@dcl/sdk/math'
-import { ReactEcsRenderer } from '@dcl/sdk/react-ecs'
+import ReactEcs, { ReactEcsRenderer, UiEntity } from '@dcl/sdk/react-ecs'
 import { getPlayer } from '@dcl/sdk/players'
 import { openExternalUrl } from '~system/RestrictedActions'
-import { StaticTVClient, GuideVideo } from '@thestatic-tv/dcl-sdk'
 
-// ============================================
-// LINKS
-// ============================================
+// >>> REQUIRED: Import the SDK
+import { StaticTVClient, GuideVideo } from '@thestatic-tv/dcl-sdk'
+import { _fallback } from './demo-config'
+
+
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║                                                                           ║
+// ║   >>> ENTER YOUR API KEY BELOW <<<                                        ║
+// ║                                                                           ║
+// ║   Get your key at: https://thestatic.tv/dashboard                         ║
+// ║                                                                           ║
+// ║   Key types (all start with dcls_):                                       ║
+// ║     - Lite: Visitor tracking only                                         ║
+// ║     - Full: Guide UI, Chat UI, heartbeat, interactions                    ║
+// ║                                                                           ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+const YOUR_API_KEY = ''  // <========== PASTE YOUR KEY HERE
+
+// For local development, set to true
+const IS_LOCAL = false
+
+
+// ============================================================================
+// >>> REQUIRED: VIDEO SCREEN ENTITY
+// ============================================================================
+// You need a video screen to display content from the guide
+const videoScreen = engine.addEntity()
+const videoScreenFrame = engine.addEntity()  // --- DEMO: decorative frame
+const videoScreenLabel = engine.addEntity()  // --- DEMO: label below screen
+
+
+// ============================================================================
+// >>> REQUIRED: HANDLE VIDEO SELECTION
+// ============================================================================
+// This callback is triggered when a user selects a video from the Guide UI
+function handleVideoSelect(video: GuideVideo) {
+  console.log('[thestatic.tv] Video selected:', video.name)
+
+  // >>> REQUIRED: Update the video player with selected stream
+  VideoPlayer.createOrReplace(videoScreen, {
+    src: video.src,
+    playing: true,
+    loop: true,
+    volume: 0.8
+  })
+
+  // >>> REQUIRED: Apply video texture to screen
+  Material.setPbrMaterial(videoScreen, {
+    texture: Material.Texture.Video({ videoPlayerEntity: videoScreen }),
+    roughness: 1.0,
+    metallic: 0,
+    emissiveColor: Color4.White(),
+    emissiveIntensity: 0.5,
+    emissiveTexture: Material.Texture.Video({ videoPlayerEntity: videoScreen })
+  })
+
+  // --- DEMO: Update label with video name
+  TextShape.getMutable(videoScreenLabel).text = video.name
+
+  // >>> REQUIRED: Tell guide which video is playing (shows "PLAYING" badge)
+  if (staticTV.guideUI) {
+    staticTV.guideUI.currentVideoId = video.id
+  }
+
+  // OPTIONAL: Track watch time analytics
+  if (staticTV.heartbeat && video.channelId) {
+    staticTV.heartbeat.startWatching(video.channelId)
+  }
+}
+
+
+// ============================================================================
+// >>> REQUIRED: INITIALIZE THE SDK CLIENT
+// ============================================================================
+const player = getPlayer()
+const API_KEY = YOUR_API_KEY || _fallback()
+
+const staticTV = new StaticTVClient({
+  apiKey: API_KEY,
+  baseUrl: IS_LOCAL ? 'http://localhost:3000/api/v1/dcl' : undefined,
+  debug: true, // Set false in production
+  player: {
+    wallet: player?.userId,
+    name: player?.name
+  },
+  // >>> REQUIRED: Configure Guide UI with your video select handler
+  guideUI: {
+    onVideoSelect: handleVideoSelect
+  },
+  // OPTIONAL: Configure Chat UI
+  chatUI: {
+    fontScale: 1.0
+  }
+})
+
+
+// ============================================================================
+// >>> REQUIRED: INITIALIZE UI MODULES
+// ============================================================================
+// Wait for server to confirm subscription, then init Guide & Chat
+async function initializeUI() {
+  // Wait for session to determine if Full or Lite
+  let attempts = 0
+  while (staticTV.isLite && attempts < 20) {
+    await new Promise(resolve => setTimeout(resolve, 500))
+    attempts++
+  }
+
+  // Init Guide (Full subscription only)
+  if (staticTV.guideUI) {
+    await staticTV.guideUI.init()
+    console.log('[thestatic.tv] Guide UI ready')
+  }
+
+  // Init Chat (Full subscription only)
+  if (staticTV.chatUI) {
+    await staticTV.chatUI.init()
+    console.log('[thestatic.tv] Chat UI ready')
+  }
+
+  // --- DEMO: Update scene text based on mode
+  if (!staticTV.isLite) {
+    updateUIForFullMode()
+    console.log('[thestatic.tv] Mode: FULL - Guide & Chat enabled')
+  } else {
+    console.log('[thestatic.tv] Mode: LITE - Visitor tracking only')
+  }
+}
+
+initializeUI()
+
+
+// ============================================================================
+// >>> REQUIRED: RENDER UI COMPONENTS
+// ============================================================================
+// This renders the Guide and Chat toggle buttons and panels
+// For Lite mode (example only), we show grayed out upgrade buttons
+
+// --- DEMO: Track upgrade prompt state for Lite mode buttons
+let showGuideUpgradePrompt = false
+let showChatUpgradePrompt = false
+
+// --- DEMO: Grayed out Guide button for Lite mode
+function renderLiteGuideButton() {
+  if (showGuideUpgradePrompt) {
+    return ReactEcs.createElement(UiEntity, {
+      uiTransform: {
+        positionType: 'absolute',
+        position: { right: 20, bottom: 60 },
+        width: 280,
+        height: 120,
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 15,
+      },
+      uiBackground: { color: Color4.create(0.05, 0.05, 0.08, 0.95) },
+      children: [
+        ReactEcs.createElement(UiEntity, {
+          uiText: { value: 'GUIDE requires Full subscription', fontSize: 14, color: Color4.White() },
+          uiTransform: { marginBottom: 10 },
+        }),
+        ReactEcs.createElement(UiEntity, {
+          uiTransform: { width: 200, height: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+          uiBackground: { color: COLORS.cyan },
+          onMouseDown: () => { openExternalUrl({ url: LINKS.dashboard }); showGuideUpgradePrompt = false },
+          children: [ReactEcs.createElement(UiEntity, { uiText: { value: 'UPGRADE NOW', fontSize: 14, color: Color4.Black() } })],
+        }),
+        ReactEcs.createElement(UiEntity, {
+          uiTransform: { width: 200, height: 25, justifyContent: 'center', alignItems: 'center' },
+          onMouseDown: () => { showGuideUpgradePrompt = false },
+          children: [ReactEcs.createElement(UiEntity, { uiText: { value: 'Close', fontSize: 12, color: Color4.Gray() } })],
+        }),
+      ],
+    })
+  }
+  return ReactEcs.createElement(UiEntity, {
+    uiTransform: { positionType: 'absolute', position: { right: 130, bottom: 10 }, width: 100, height: 45, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' },
+    uiBackground: { color: Color4.create(0.3, 0.3, 0.3, 0.7) },
+    onMouseDown: () => { showGuideUpgradePrompt = true },
+    children: [
+      ReactEcs.createElement(UiEntity, { uiText: { value: 'GUIDE', fontSize: 14, color: Color4.create(0.6, 0.6, 0.6, 1) } }),
+      ReactEcs.createElement(UiEntity, { uiText: { value: 'FULL ONLY', fontSize: 9, color: Color4.create(0.5, 0.5, 0.5, 1) } }),
+    ],
+  })
+}
+
+// --- DEMO: Grayed out Chat button for Lite mode
+function renderLiteChatButton() {
+  if (showChatUpgradePrompt) {
+    return ReactEcs.createElement(UiEntity, {
+      uiTransform: {
+        positionType: 'absolute',
+        position: { right: 20, bottom: 60 },
+        width: 280,
+        height: 120,
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 15,
+      },
+      uiBackground: { color: Color4.create(0.05, 0.05, 0.08, 0.95) },
+      children: [
+        ReactEcs.createElement(UiEntity, {
+          uiText: { value: 'CHAT requires Full subscription', fontSize: 14, color: Color4.White() },
+          uiTransform: { marginBottom: 10 },
+        }),
+        ReactEcs.createElement(UiEntity, {
+          uiTransform: { width: 200, height: 35, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+          uiBackground: { color: COLORS.cyan },
+          onMouseDown: () => { openExternalUrl({ url: LINKS.dashboard }); showChatUpgradePrompt = false },
+          children: [ReactEcs.createElement(UiEntity, { uiText: { value: 'UPGRADE NOW', fontSize: 14, color: Color4.Black() } })],
+        }),
+        ReactEcs.createElement(UiEntity, {
+          uiTransform: { width: 200, height: 25, justifyContent: 'center', alignItems: 'center' },
+          onMouseDown: () => { showChatUpgradePrompt = false },
+          children: [ReactEcs.createElement(UiEntity, { uiText: { value: 'Close', fontSize: 12, color: Color4.Gray() } })],
+        }),
+      ],
+    })
+  }
+  return ReactEcs.createElement(UiEntity, {
+    uiTransform: { positionType: 'absolute', position: { right: 20, bottom: 10 }, width: 100, height: 45, justifyContent: 'center', alignItems: 'center', flexDirection: 'column' },
+    uiBackground: { color: Color4.create(0.3, 0.3, 0.3, 0.7) },
+    onMouseDown: () => { showChatUpgradePrompt = true },
+    children: [
+      ReactEcs.createElement(UiEntity, { uiText: { value: 'CHAT', fontSize: 14, color: Color4.create(0.6, 0.6, 0.6, 1) } }),
+      ReactEcs.createElement(UiEntity, { uiText: { value: 'FULL ONLY', fontSize: 9, color: Color4.create(0.5, 0.5, 0.5, 1) } }),
+    ],
+  })
+}
+
+ReactEcsRenderer.setUiRenderer(() => {
+  // Full mode: use SDK components
+  if (!staticTV.isLite) {
+    return ReactEcs.createElement(UiEntity, {
+      uiTransform: { width: '100%', height: '100%', positionType: 'absolute' },
+      children: [
+        staticTV.guideUI?.getComponent(),
+        staticTV.chatUI?.getComponent()
+      ].filter(Boolean)
+    })
+  }
+
+  // Lite mode: show grayed out upgrade buttons (DEMO for this example only)
+  return ReactEcs.createElement(UiEntity, {
+    uiTransform: { width: '100%', height: '100%', positionType: 'absolute' },
+    children: [
+      renderLiteGuideButton(),
+      renderLiteChatButton()
+    ]
+  })
+})
+
+
+// ============================================================================
+// --- DEMO ONLY: Everything below is just for this example scene
+// ============================================================================
+// You don't need any of this! Just integrate the SDK code above into YOUR scene.
+
 const LINKS = {
   dashboard: 'https://thestatic.tv/dashboard',
   github: 'https://github.com/thestatic-tv/thestatic-dcl-starter'
 }
 
-// ============================================
-// CONFIGURATION
-// ============================================
-// Scene key (dcls_) = Lite mode: visitor tracking only
-// Channel key (dclk_) = Full mode: guide, chat, heartbeat, interactions
-  const API_KEY = 'ADD KEY HERE'
-
-
-// Set to true for local development
-const IS_LOCAL = false
-
-// Get player data from DCL
-const player = getPlayer()
-
-// Handle video selection from Guide UI
-function handleVideoSelect(video: GuideVideo) {
-  console.log('[thestatic.tv] Video selected:', video.name)
-  console.log('[thestatic.tv] Stream URL:', video.src)
-  // In a real scene, you would:
-  // 1. Create or update a VideoPlayer entity with video.src
-  // 2. Set staticTV.guideUI.currentVideoId = video.id to show "PLAYING" indicator
-}
-
-// Initialize the StaticTV client
-const staticTV = new StaticTVClient({
-  apiKey: API_KEY,
-  baseUrl: IS_LOCAL ? 'http://localhost:3000/api/v1/dcl' : undefined,
-  debug: true,
-  player: {
-    wallet: player?.userId,
-    name: player?.name
-  },
-  // Guide UI configuration (only used with channel keys)
-  guideUI: {
-    onVideoSelect: handleVideoSelect
-  },
-  // Chat UI configuration (only used with channel keys)
-  chatUI: {
-    position: 'right',
-    fontScale: 1.0
-  }
-})
-
-// Initialize UI modules if available (Full mode only)
-async function initializeUI() {
-  if (staticTV.guideUI) {
-    await staticTV.guideUI.init()
-    console.log('[thestatic.tv] Guide UI initialized')
-  }
-  if (staticTV.chatUI) {
-    await staticTV.chatUI.init()
-    console.log('[thestatic.tv] Chat UI initialized')
-  }
-}
-
-// Start UI initialization
-initializeUI()
-
-// ============================================
-// UI RENDERING (Full mode only)
-// ============================================
-ReactEcsRenderer.setUiRenderer(() => {
-  return [
-    staticTV.guideUI?.getComponent(),
-    staticTV.chatUI?.getComponent()
-  ]
-})
-
-// ============================================
-// COLORS - thestatic.tv brand palette
-// ============================================
 const COLORS = {
   cyan: Color4.create(0, 0.9, 0.9, 1),
   cyanGlow: Color4.create(0, 0.4, 0.4, 1),
   darkPanel: Color4.create(0.08, 0.08, 0.1, 1),
-  floor: Color4.create(0.05, 0.05, 0.08, 1),
   green: Color4.create(0, 1, 0.5, 1),
   greenGlow: Color4.create(0, 0.5, 0.25, 1),
   red: Color4.create(1, 0.2, 0.2, 1),
   redGlow: Color4.create(0.5, 0.1, 0.1, 1),
   yellow: Color4.create(1, 0.85, 0, 1),
-  yellowGlow: Color4.create(0.5, 0.42, 0, 1),
-  magenta: Color4.create(1, 0, 0.8, 1),
-  magentaGlow: Color4.create(0.5, 0, 0.4, 1),
   white: Color4.create(1, 1, 1, 1)
 }
 
-// ============================================
-// SCENE SETUP
-// ============================================
-
-// Main floor collider (invisible, for walking)
+// --- DEMO: Floor
 const floorCollider = engine.addEntity()
 Transform.create(floorCollider, {
   position: Vector3.create(8, -0.1, 8),
@@ -134,125 +323,16 @@ Transform.create(floorCollider, {
 })
 MeshCollider.setBox(floorCollider)
 
-// Grid of dark tiles
-const TILE_SIZE = 1.9
-const GAP = 0.1
-const GRID_START = 1
-const GRID_COUNT = 7
-
-for (let row = 0; row < GRID_COUNT; row++) {
-  for (let col = 0; col < GRID_COUNT; col++) {
-    const tile = engine.addEntity()
-    const x = GRID_START + col * (TILE_SIZE + GAP) + TILE_SIZE / 2
-    const z = GRID_START + row * (TILE_SIZE + GAP) + TILE_SIZE / 2
-
-    Transform.create(tile, {
-      position: Vector3.create(x, 0.05, z),
-      scale: Vector3.create(TILE_SIZE, 0.1, TILE_SIZE)
-    })
-    MeshRenderer.setBox(tile)
-    Material.setPbrMaterial(tile, {
-      albedoColor: COLORS.darkPanel,
-      metallic: 0.8,
-      roughness: 0.2
-    })
-  }
-}
-
-// Glowing grid lines (horizontal)
-const LINE_HEIGHT = 0.08
-for (let i = 0; i <= GRID_COUNT; i++) {
-  const lineZ = GRID_START + i * (TILE_SIZE + GAP) - GAP / 2
-  const hLine = engine.addEntity()
-  Transform.create(hLine, {
-    position: Vector3.create(8, LINE_HEIGHT / 2, lineZ),
-    scale: Vector3.create(14, LINE_HEIGHT, GAP)
-  })
-  MeshRenderer.setBox(hLine)
-  Material.setPbrMaterial(hLine, {
-    albedoColor: COLORS.cyan,
-    emissiveColor: COLORS.cyan,
-    emissiveIntensity: 3
-  })
-}
-
-// Glowing grid lines (vertical)
-for (let i = 0; i <= GRID_COUNT; i++) {
-  const lineX = GRID_START + i * (TILE_SIZE + GAP) - GAP / 2
-  const vLine = engine.addEntity()
-  Transform.create(vLine, {
-    position: Vector3.create(lineX, LINE_HEIGHT / 2, 8),
-    scale: Vector3.create(GAP, LINE_HEIGHT, 14)
-  })
-  MeshRenderer.setBox(vLine)
-  Material.setPbrMaterial(vLine, {
-    albedoColor: COLORS.cyan,
-    emissiveColor: COLORS.cyan,
-    emissiveIntensity: 3
-  })
-}
-
-// Outer edge borders
-const EDGE_WIDTH = 0.15
-const EDGE_LENGTH = 15
-
-// North edge
-const edgeN = engine.addEntity()
-Transform.create(edgeN, {
-  position: Vector3.create(8, 0.06, 15),
-  scale: Vector3.create(EDGE_LENGTH, 0.12, EDGE_WIDTH)
+const floor = engine.addEntity()
+Transform.create(floor, {
+  position: Vector3.create(8, 0, 8),
+  scale: Vector3.create(16, 0.1, 16)
 })
-MeshRenderer.setBox(edgeN)
-Material.setPbrMaterial(edgeN, {
-  albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyan,
-  emissiveIntensity: 4
-})
+MeshRenderer.setBox(floor)
+MeshCollider.setBox(floor)
+Material.setPbrMaterial(floor, { albedoColor: COLORS.darkPanel })
 
-// South edge
-const edgeS = engine.addEntity()
-Transform.create(edgeS, {
-  position: Vector3.create(8, 0.06, 1),
-  scale: Vector3.create(EDGE_LENGTH, 0.12, EDGE_WIDTH)
-})
-MeshRenderer.setBox(edgeS)
-Material.setPbrMaterial(edgeS, {
-  albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyan,
-  emissiveIntensity: 4
-})
-
-// East edge
-const edgeE = engine.addEntity()
-Transform.create(edgeE, {
-  position: Vector3.create(15, 0.06, 8),
-  scale: Vector3.create(EDGE_WIDTH, 0.12, EDGE_LENGTH)
-})
-MeshRenderer.setBox(edgeE)
-Material.setPbrMaterial(edgeE, {
-  albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyan,
-  emissiveIntensity: 4
-})
-
-// West edge
-const edgeW = engine.addEntity()
-Transform.create(edgeW, {
-  position: Vector3.create(1, 0.06, 8),
-  scale: Vector3.create(EDGE_WIDTH, 0.12, EDGE_LENGTH)
-})
-MeshRenderer.setBox(edgeW)
-Material.setPbrMaterial(edgeW, {
-  albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyan,
-  emissiveIntensity: 4
-})
-
-// ============================================
-// WELCOME SIGN
-// ============================================
-
-// Sign backdrop
+// --- DEMO: Welcome Sign
 const signBack = engine.addEntity()
 Transform.create(signBack, {
   position: Vector3.create(8, 3.5, 2),
@@ -260,26 +340,8 @@ Transform.create(signBack, {
 })
 MeshRenderer.setBox(signBack)
 MeshCollider.setBox(signBack)
-Material.setPbrMaterial(signBack, {
-  albedoColor: COLORS.darkPanel,
-  metallic: 0.9,
-  roughness: 0.1
-})
+Material.setPbrMaterial(signBack, { albedoColor: COLORS.darkPanel })
 
-// Sign border
-const signFrame = engine.addEntity()
-Transform.create(signFrame, {
-  position: Vector3.create(8, 3.5, 1.9),
-  scale: Vector3.create(8.2, 3.2, 0.05)
-})
-MeshRenderer.setBox(signFrame)
-Material.setPbrMaterial(signFrame, {
-  albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyanGlow,
-  emissiveIntensity: 2
-})
-
-// Main title
 const titleText = engine.addEntity()
 Transform.create(titleText, {
   position: Vector3.create(8, 4.2, 2.2),
@@ -292,243 +354,19 @@ TextShape.create(titleText, {
   width: 10
 })
 
-// Subtitle
 const subtitleText = engine.addEntity()
 Transform.create(subtitleText, {
   position: Vector3.create(8, 3.2, 2.2),
   rotation: Quaternion.fromEulerDegrees(0, 180, 0)
 })
 TextShape.create(subtitleText, {
-  text: staticTV.isLite ? 'Visitor Tracking Active' : 'Full Mode - Guide & Chat Available',
+  text: 'Visitor Tracking Active',
   fontSize: 2,
   textColor: COLORS.white,
   width: 10
 })
 
-// ============================================
-// STATUS PANEL
-// ============================================
-
-// Status panel backdrop
-const statusPanel = engine.addEntity()
-Transform.create(statusPanel, {
-  position: Vector3.create(8, 1.8, 2.5),
-  scale: Vector3.create(4, 1.2, 0.1)
-})
-MeshRenderer.setBox(statusPanel)
-MeshCollider.setBox(statusPanel)
-Material.setPbrMaterial(statusPanel, {
-  albedoColor: COLORS.darkPanel,
-  metallic: 0.8,
-  roughness: 0.2
-})
-
-// Status indicator orb
-const statusOrb = engine.addEntity()
-Transform.create(statusOrb, {
-  position: Vector3.create(9.5, 2, 2.6),
-  scale: Vector3.create(0.25, 0.25, 0.25)
-})
-MeshRenderer.setSphere(statusOrb)
-
-// Status text
-const statusText = engine.addEntity()
-Transform.create(statusText, {
-  position: Vector3.create(8.2, 2, 2.6),
-  rotation: Quaternion.fromEulerDegrees(0, 180, 0)
-})
-TextShape.create(statusText, {
-  text: 'SESSION: CONNECTING...',
-  fontSize: 1.5,
-  textColor: COLORS.yellow,
-  width: 6
-})
-
-// Session timer text
-const timerText = engine.addEntity()
-Transform.create(timerText, {
-  position: Vector3.create(8.2, 1.5, 2.6),
-  rotation: Quaternion.fromEulerDegrees(0, 180, 0)
-})
-TextShape.create(timerText, {
-  text: 'TIME: 00:00',
-  fontSize: 1.2,
-  textColor: COLORS.white,
-  width: 6
-})
-
-// ============================================
-// UI TOGGLE BUTTONS (Full mode only)
-// ============================================
-
-if (!staticTV.isLite && !staticTV.isDisabled) {
-  // Guide button (right side)
-  const guideButton = engine.addEntity()
-  Transform.create(guideButton, {
-    position: Vector3.create(14, 2, 6),
-    scale: Vector3.create(0.1, 1.5, 2),
-    rotation: Quaternion.fromEulerDegrees(0, 0, 0)
-  })
-  MeshRenderer.setBox(guideButton)
-  MeshCollider.setBox(guideButton)
-  Material.setPbrMaterial(guideButton, {
-    albedoColor: COLORS.cyan,
-    emissiveColor: COLORS.cyanGlow,
-    emissiveIntensity: 2
-  })
-
-  const guideButtonText = engine.addEntity()
-  Transform.create(guideButtonText, {
-    position: Vector3.create(13.8, 2, 6),
-    rotation: Quaternion.fromEulerDegrees(0, 270, 0)
-  })
-  TextShape.create(guideButtonText, {
-    text: 'GUIDE',
-    fontSize: 2,
-    textColor: COLORS.white,
-    width: 10
-  })
-
-  pointerEventsSystem.onPointerDown(
-    { entity: guideButton, opts: { button: InputAction.IA_POINTER, hoverText: 'Toggle Guide' } },
-    () => {
-      if (staticTV.guideUI) {
-        staticTV.guideUI.toggle()
-        console.log('[thestatic.tv] Guide visibility:', staticTV.guideUI.isVisible)
-      }
-    }
-  )
-
-  // Chat button (right side)
-  const chatButton = engine.addEntity()
-  Transform.create(chatButton, {
-    position: Vector3.create(14, 2, 10),
-    scale: Vector3.create(0.1, 1.5, 2),
-    rotation: Quaternion.fromEulerDegrees(0, 0, 0)
-  })
-  MeshRenderer.setBox(chatButton)
-  MeshCollider.setBox(chatButton)
-  Material.setPbrMaterial(chatButton, {
-    albedoColor: COLORS.magenta,
-    emissiveColor: COLORS.magentaGlow,
-    emissiveIntensity: 2
-  })
-
-  const chatButtonText = engine.addEntity()
-  Transform.create(chatButtonText, {
-    position: Vector3.create(13.8, 2, 10),
-    rotation: Quaternion.fromEulerDegrees(0, 270, 0)
-  })
-  TextShape.create(chatButtonText, {
-    text: 'CHAT',
-    fontSize: 2,
-    textColor: COLORS.white,
-    width: 10
-  })
-
-  pointerEventsSystem.onPointerDown(
-    { entity: chatButton, opts: { button: InputAction.IA_POINTER, hoverText: 'Toggle Chat' } },
-    () => {
-      if (staticTV.chatUI) {
-        staticTV.chatUI.toggle()
-        console.log('[thestatic.tv] Chat visibility:', staticTV.chatUI.isVisible)
-      }
-    }
-  )
-}
-
-// ============================================
-// FLOATING CUBES - Animated decoration
-// ============================================
-
-interface FloatingCube {
-  entity: Entity
-  baseY: number
-  offset: number
-  speed: number
-  rotSpeed: number
-}
-
-const floatingCubes: FloatingCube[] = []
-
-const cubePositions = [
-  { x: 3, z: 3 },
-  { x: 13, z: 3 },
-  { x: 3, z: 13 },
-  { x: 13, z: 13 },
-  { x: 14, z: 8 }
-]
-
-cubePositions.forEach((pos) => {
-  const cube = engine.addEntity()
-  const baseY = 2 + Math.random() * 2
-
-  Transform.create(cube, {
-    position: Vector3.create(pos.x, baseY, pos.z),
-    scale: Vector3.create(0.4, 0.4, 0.4),
-    rotation: Quaternion.fromEulerDegrees(45, 45, 0)
-  })
-  MeshRenderer.setBox(cube)
-  Material.setPbrMaterial(cube, {
-    albedoColor: COLORS.cyan,
-    emissiveColor: COLORS.cyanGlow,
-    emissiveIntensity: 1.5,
-    metallic: 1,
-    roughness: 0
-  })
-
-  floatingCubes.push({
-    entity: cube,
-    baseY,
-    offset: Math.random() * Math.PI * 2,
-    speed: 0.5 + Math.random() * 0.5,
-    rotSpeed: 20 + Math.random() * 40
-  })
-})
-
-// ============================================
-// CORNER PILLARS
-// ============================================
-
-const pillarPositions = [
-  { x: 2, z: 2 },
-  { x: 14, z: 2 },
-  { x: 2, z: 14 },
-  { x: 14, z: 14 }
-]
-
-pillarPositions.forEach(pos => {
-  const pillar = engine.addEntity()
-  Transform.create(pillar, {
-    position: Vector3.create(pos.x, 1.5, pos.z),
-    scale: Vector3.create(0.3, 3, 0.3)
-  })
-  MeshRenderer.setBox(pillar)
-  MeshCollider.setBox(pillar)
-  Material.setPbrMaterial(pillar, {
-    albedoColor: COLORS.darkPanel,
-    metallic: 0.9,
-    roughness: 0.1
-  })
-
-  const pillarLight = engine.addEntity()
-  Transform.create(pillarLight, {
-    position: Vector3.create(pos.x, 3.1, pos.z),
-    scale: Vector3.create(0.35, 0.1, 0.35)
-  })
-  MeshRenderer.setBox(pillarLight)
-  Material.setPbrMaterial(pillarLight, {
-    albedoColor: COLORS.cyan,
-    emissiveColor: COLORS.cyanGlow,
-    emissiveIntensity: 4
-  })
-})
-
-// ============================================
-// INFO DISPLAY
-// ============================================
-
-// Info panel background
+// --- DEMO: Info Panel
 const infoPanelBack = engine.addEntity()
 Transform.create(infoPanelBack, {
   position: Vector3.create(8, 2.5, 14),
@@ -536,74 +374,32 @@ Transform.create(infoPanelBack, {
 })
 MeshRenderer.setBox(infoPanelBack)
 MeshCollider.setBox(infoPanelBack)
-Material.setPbrMaterial(infoPanelBack, {
-  albedoColor: COLORS.darkPanel,
-  metallic: 0.8,
-  roughness: 0.2
-})
+Material.setPbrMaterial(infoPanelBack, { albedoColor: COLORS.darkPanel })
 
-// Info panel frame
-const infoPanelFrame = engine.addEntity()
-Transform.create(infoPanelFrame, {
-  position: Vector3.create(8, 2.5, 14.1),
-  scale: Vector3.create(6.2, 4.2, 0.05)
-})
-MeshRenderer.setBox(infoPanelFrame)
-Material.setPbrMaterial(infoPanelFrame, {
-  albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyanGlow,
-  emissiveIntensity: 2
-})
-
-// Info title
 const infoTitle = engine.addEntity()
 Transform.create(infoTitle, {
   position: Vector3.create(8, 4, 13.8),
   rotation: Quaternion.fromEulerDegrees(0, 0, 0)
 })
 TextShape.create(infoTitle, {
-  text: staticTV.isLite ? 'KNOW YOUR AUDIENCE' : 'FULL MODE FEATURES',
+  text: 'KNOW YOUR AUDIENCE',
   fontSize: 2.5,
   textColor: COLORS.cyan,
-  width: 20,
-  height: 2
+  width: 20
 })
 
-// Info content
 const infoContent = engine.addEntity()
 Transform.create(infoContent, {
-  position: Vector3.create(8, 2.5, 13.8),
-  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+  position: Vector3.create(8, 2.5, 13.8)
 })
 TextShape.create(infoContent, {
-  text: staticTV.isLite
-    ? 'See who visits your scene LIVE\nTrack new vs returning visitors\nMeasure engagement & dwell time\nAll data in your dashboard'
-    : 'Channel Guide UI - Browse streams\nReal-time Chat - Talk to viewers\nWatch Metrics - Track engagement\nClick GUIDE or CHAT to try!',
+  text: 'See who visits your scene LIVE\nTrack new vs returning visitors\nMeasure engagement & dwell time\nAll data in your dashboard',
   fontSize: 1.6,
   textColor: COLORS.white,
-  width: 20,
-  height: 4
+  width: 20
 })
 
-// Info footer
-const infoFooter = engine.addEntity()
-Transform.create(infoFooter, {
-  position: Vector3.create(8, 1.2, 13.8),
-  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
-})
-TextShape.create(infoFooter, {
-  text: 'Click buttons below to get started!',
-  fontSize: 1.4,
-  textColor: COLORS.white,
-  width: 20,
-  height: 2
-})
-
-// ============================================
-// CLICKABLE LINK BUTTONS
-// ============================================
-
-// Dashboard button
+// --- DEMO: Buttons
 const dashboardButton = engine.addEntity()
 Transform.create(dashboardButton, {
   position: Vector3.create(6.5, 0.6, 13.85),
@@ -611,33 +407,24 @@ Transform.create(dashboardButton, {
 })
 MeshRenderer.setBox(dashboardButton)
 MeshCollider.setBox(dashboardButton)
-Material.setPbrMaterial(dashboardButton, {
-  albedoColor: COLORS.green,
-  emissiveColor: COLORS.greenGlow,
-  emissiveIntensity: 2
-})
+Material.setPbrMaterial(dashboardButton, { albedoColor: COLORS.green })
 
 const dashboardButtonText = engine.addEntity()
 Transform.create(dashboardButtonText, {
-  position: Vector3.create(6.5, 0.6, 13.7),
-  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+  position: Vector3.create(6.5, 0.6, 13.7)
 })
 TextShape.create(dashboardButtonText, {
   text: 'FREE TRIAL',
   fontSize: 1.5,
   textColor: COLORS.darkPanel,
-  width: 10,
-  height: 2
+  width: 10
 })
 
 pointerEventsSystem.onPointerDown(
   { entity: dashboardButton, opts: { button: InputAction.IA_POINTER, hoverText: 'Open thestatic.tv' } },
-  () => {
-    openExternalUrl({ url: LINKS.dashboard })
-  }
+  () => { openExternalUrl({ url: LINKS.dashboard }) }
 )
 
-// GitHub button
 const githubButton = engine.addEntity()
 Transform.create(githubButton, {
   position: Vector3.create(9.5, 0.6, 13.85),
@@ -645,242 +432,116 @@ Transform.create(githubButton, {
 })
 MeshRenderer.setBox(githubButton)
 MeshCollider.setBox(githubButton)
-Material.setPbrMaterial(githubButton, {
-  albedoColor: COLORS.cyan,
-  emissiveColor: COLORS.cyanGlow,
-  emissiveIntensity: 2
-})
+Material.setPbrMaterial(githubButton, { albedoColor: COLORS.cyan })
 
 const githubButtonText = engine.addEntity()
 Transform.create(githubButtonText, {
-  position: Vector3.create(9.5, 0.6, 13.7),
-  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+  position: Vector3.create(9.5, 0.6, 13.7)
 })
 TextShape.create(githubButtonText, {
   text: 'GET CODE',
   fontSize: 1.5,
   textColor: COLORS.darkPanel,
-  width: 10,
-  height: 2
+  width: 10
 })
 
 pointerEventsSystem.onPointerDown(
   { entity: githubButton, opts: { button: InputAction.IA_POINTER, hoverText: 'View on GitHub' } },
-  () => {
-    openExternalUrl({ url: LINKS.github })
-  }
+  () => { openExternalUrl({ url: LINKS.github }) }
 )
 
-// ============================================
-// STATS PANEL (Left side)
-// ============================================
-
-// Stats panel background
-const statsPanelBack = engine.addEntity()
-Transform.create(statsPanelBack, {
-  position: Vector3.create(2, 2.5, 8),
-  scale: Vector3.create(0.1, 3, 4),
-  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
+// --- DEMO: Video Screen Setup (Right side wall)
+Transform.create(videoScreenFrame, {
+  position: Vector3.create(13.95, 3, 8),
+  scale: Vector3.create(0.15, 4.2, 7.5)
 })
-MeshRenderer.setBox(statsPanelBack)
-MeshCollider.setBox(statsPanelBack)
-Material.setPbrMaterial(statsPanelBack, {
-  albedoColor: COLORS.darkPanel,
-  metallic: 0.8,
-  roughness: 0.2
-})
-
-// Stats panel frame
-const statsPanelFrame = engine.addEntity()
-Transform.create(statsPanelFrame, {
-  position: Vector3.create(1.9, 2.5, 8),
-  scale: Vector3.create(0.05, 3.2, 4.2),
-  rotation: Quaternion.fromEulerDegrees(0, 0, 0)
-})
-MeshRenderer.setBox(statsPanelFrame)
-Material.setPbrMaterial(statsPanelFrame, {
+MeshRenderer.setBox(videoScreenFrame)
+Material.setPbrMaterial(videoScreenFrame, {
   albedoColor: COLORS.cyan,
   emissiveColor: COLORS.cyanGlow,
   emissiveIntensity: 2
 })
 
-// Stats title
-const statsTitle = engine.addEntity()
-Transform.create(statsTitle, {
-  position: Vector3.create(2.2, 3.5, 8),
-  rotation: Quaternion.fromEulerDegrees(0, 270, 0)
+// >>> REQUIRED: Position your video screen (this is the important part!)
+Transform.create(videoScreen, {
+  position: Vector3.create(13.85, 3, 8),
+  scale: Vector3.create(7.2, 4.05, 1),  // 16:9 aspect ratio
+  rotation: Quaternion.fromEulerDegrees(0, 90, 0)
 })
-TextShape.create(statsTitle, {
-  text: 'TODAY\'S STATS',
-  fontSize: 2,
-  textColor: COLORS.cyan,
-  width: 20,
-  height: 2
+MeshRenderer.setPlane(videoScreen)
+MeshCollider.setPlane(videoScreen)
+
+// Play a default video until user selects from guide
+VideoPlayer.create(videoScreen, {
+  src: 'videos/dynamic-loop.mp4',
+  playing: true,
+  loop: true,
+  volume: 0.5
+})
+Material.setPbrMaterial(videoScreen, {
+  texture: Material.Texture.Video({ videoPlayerEntity: videoScreen }),
+  roughness: 1.0,
+  metallic: 0,
+  emissiveColor: Color4.White(),
+  emissiveIntensity: 0.5,
+  emissiveTexture: Material.Texture.Video({ videoPlayerEntity: videoScreen })
 })
 
-// Visitors count text
-const visitorsText = engine.addEntity()
-Transform.create(visitorsText, {
-  position: Vector3.create(2.2, 2.8, 8),
-  rotation: Quaternion.fromEulerDegrees(0, 270, 0)
-})
-TextShape.create(visitorsText, {
-  text: 'Visitors: --',
-  fontSize: 1.8,
-  textColor: COLORS.white,
-  width: 20,
-  height: 2
-})
+// Click to toggle play/pause
+pointerEventsSystem.onPointerDown(
+  { entity: videoScreen, opts: { button: InputAction.IA_POINTER, hoverText: 'Toggle Play/Pause' } },
+  () => {
+    const p = VideoPlayer.getMutableOrNull(videoScreen)
+    if (p) p.playing = !p.playing
+  }
+)
 
-// Sessions count text
-const sessionsText = engine.addEntity()
-Transform.create(sessionsText, {
-  position: Vector3.create(2.2, 2.2, 8),
-  rotation: Quaternion.fromEulerDegrees(0, 270, 0)
+// --- DEMO: Video label
+const videoScreenLabelBg = engine.addEntity()
+Transform.create(videoScreenLabelBg, {
+  position: Vector3.create(13.85, 0.7, 8),
+  scale: Vector3.create(0.1, 0.6, 4)
 })
-TextShape.create(sessionsText, {
-  text: 'Sessions: --',
-  fontSize: 1.8,
-  textColor: COLORS.white,
-  width: 20,
-  height: 2
-})
+MeshRenderer.setBox(videoScreenLabelBg)
+Material.setPbrMaterial(videoScreenLabelBg, { albedoColor: COLORS.darkPanel })
 
-// Your visitor number text
-const visitorNumText = engine.addEntity()
-Transform.create(visitorNumText, {
-  position: Vector3.create(2.2, 1.5, 8),
-  rotation: Quaternion.fromEulerDegrees(0, 270, 0)
+Transform.create(videoScreenLabel, {
+  position: Vector3.create(13.75, 0.7, 8),
+  rotation: Quaternion.fromEulerDegrees(0, 90, 0)
 })
-TextShape.create(visitorNumText, {
-  text: 'You are visitor #--',
+TextShape.create(videoScreenLabel, {
+  text: 'Click GUIDE to browse channels',
   fontSize: 1.5,
-  textColor: COLORS.green,
-  width: 20,
-  height: 2
+  textColor: COLORS.cyan,
+  width: 10
 })
 
-// ============================================
-// ANIMATION SYSTEM
-// ============================================
-
-let time = 0
-let sessionTime = 0
-let lastTimerUpdate = 0
-let lastStatsFetch = 0
-let statsFetched = false
-
-engine.addSystem((dt: number) => {
-  time += dt
-
-  // Track session time when active
-  if (staticTV.session?.isSessionActive()) {
-    sessionTime += dt
-  }
-
-  // Animate floating cubes
-  floatingCubes.forEach(cube => {
-    const transform = Transform.getMutable(cube.entity)
-
-    // Float up and down
-    transform.position.y = cube.baseY + Math.sin(time * cube.speed + cube.offset) * 0.5
-
-    // Rotate
-    const currentRot = Quaternion.toEulerAngles(transform.rotation)
-    transform.rotation = Quaternion.fromEulerDegrees(
-      currentRot.x,
-      currentRot.y + dt * cube.rotSpeed,
-      currentRot.z
-    )
-  })
-
-  // Update status and timer (throttle to every 0.5 seconds)
-  if (time - lastTimerUpdate > 0.5) {
-    lastTimerUpdate = time
-    updateStatus()
-    updateTimer()
-  }
-
-  // Fetch stats once session is active, then every 30 seconds
-  if (staticTV.session?.isSessionActive() && (time - lastStatsFetch > 30 || !statsFetched)) {
-    lastStatsFetch = time
-    statsFetched = true
-    fetchAndDisplayStats()
-  }
-})
-
-// ============================================
-// STATUS UPDATE
-// ============================================
-
-function updateStatus() {
-  const isActive = staticTV.session?.isSessionActive() ?? false
-
-  // Update orb color
-  Material.setPbrMaterial(statusOrb, {
-    albedoColor: isActive ? COLORS.green : COLORS.red,
-    emissiveColor: isActive ? COLORS.greenGlow : COLORS.redGlow,
-    emissiveIntensity: 3
-  })
-
-  // Update status text
-  const mutableText = TextShape.getMutable(statusText)
-  mutableText.text = isActive ? 'SESSION: ACTIVE' : 'SESSION: INACTIVE'
-  mutableText.textColor = isActive ? COLORS.green : COLORS.red
+// --- DEMO: Update UI for Full mode
+function updateUIForFullMode() {
+  TextShape.getMutable(subtitleText).text = 'Full Mode - Guide & Chat Available'
+  TextShape.getMutable(infoTitle).text = 'FULL MODE FEATURES'
+  TextShape.getMutable(infoContent).text = 'Channel Guide UI - Browse streams\nReal-time Chat - Talk to viewers\nWatch Metrics - Track engagement\nClick GUIDE or CHAT to try!'
 }
 
-function updateTimer() {
-  const minutes = Math.floor(sessionTime / 60)
-  const seconds = Math.floor(sessionTime % 60)
-  const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 
-  const mutableTimer = TextShape.getMutable(timerText)
-  mutableTimer.text = `TIME: ${timeStr}`
-}
-
-async function fetchAndDisplayStats() {
-  if (!staticTV.session) return
-  try {
-    const stats = await staticTV.session.getStats()
-    if (stats) {
-      // Update visitors text
-      const mutableVisitors = TextShape.getMutable(visitorsText)
-      mutableVisitors.text = `Visitors: ${stats.uniqueVisitors}`
-
-      // Update sessions text
-      const mutableSessions = TextShape.getMutable(sessionsText)
-      mutableSessions.text = `Sessions: ${stats.totalSessions}`
-
-      // Update visitor number
-      const mutableVisitorNum = TextShape.getMutable(visitorNumText)
-      if (stats.visitorNumber) {
-        mutableVisitorNum.text = `You are visitor #${stats.visitorNumber}`
-        mutableVisitorNum.textColor = COLORS.green
-      } else if (stats.isFirstVisitor) {
-        mutableVisitorNum.text = 'You are the first visitor!'
-        mutableVisitorNum.textColor = COLORS.cyan
-      } else {
-        mutableVisitorNum.text = 'Welcome!'
-        mutableVisitorNum.textColor = COLORS.white
-      }
-    }
-  } catch (error) {
-    console.log('[thestatic.tv] Failed to fetch stats')
-  }
-}
-
-// ============================================
-// INITIALIZATION
-// ============================================
+// ============================================================================
+// DONE! The SDK integration is complete.
+// ============================================================================
+//
+// Summary - What you need to copy to YOUR scene:
+//
+// 1. Import: StaticTVClient, GuideVideo from '@thestatic-tv/dcl-sdk'
+// 2. Create video screen entity
+// 3. Define handleVideoSelect function
+// 4. Initialize StaticTVClient with your API key
+// 5. Call initializeUI()
+// 6. Add ReactEcsRenderer.setUiRenderer() for Guide/Chat UI
+//
+// That's it! Everything else in this file is demo decoration.
 
 console.log('='.repeat(50))
 console.log('[thestatic.tv] Example Scene Loaded')
-console.log('[thestatic.tv] SDK Mode:', staticTV.isLite ? 'LITE' : 'FULL')
 console.log('[thestatic.tv] Key Type:', staticTV.keyType)
-if (!staticTV.isLite) {
-  console.log('[thestatic.tv] Guide UI: Available (click GUIDE button)')
-  console.log('[thestatic.tv] Chat UI: Available (click CHAT button)')
-}
 console.log('[thestatic.tv] Get your key: https://thestatic.tv/dashboard')
 console.log('='.repeat(50))
 

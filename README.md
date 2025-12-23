@@ -1,186 +1,139 @@
-# thestatic.tv DCL SDK Example
+# TheStatic.tv DCL SDK - Starter Example
 
-A showcase Decentraland scene demonstrating visitor tracking with [@thestatic-tv/dcl-sdk](https://npmjs.com/package/@thestatic-tv/dcl-sdk).
-
-![SDK Version](https://img.shields.io/npm/v/@thestatic-tv/dcl-sdk?label=SDK&color=00e5e5)
-![DCL SDK](https://img.shields.io/badge/DCL%20SDK-7.x-blue)
-
-## Features
-
-- **Glowing Platform** - Cyan-accented floor with emissive edges
-- **Animated Cubes** - Floating, rotating cubes around the scene
-- **Live Stats Panel** - Real-time visitor count display (left wall)
-- **Info Panel** - SDK features and free trial info (back wall)
-- **Status Indicator** - Session tracking orb that turns green when connected
-- **Corner Pillars** - Decorative pillars with glow caps
+A complete example scene demonstrating how to integrate [@thestatic-tv/dcl-sdk](https://www.npmjs.com/package/@thestatic-tv/dcl-sdk) into your Decentraland scene.
 
 ## Quick Start
 
-### 1. Get Your Scene Key
+### 1. Get Your API Key
 
-1. Go to [thestatic.tv/dashboard](https://thestatic.tv/dashboard)
-2. Sign in or create an account
-3. Navigate to "DCL Scenes" tab
-4. Generate a new Scene Key (starts with `dcls_`)
-5. You get a **7-day free trial** automatically!
+Visit [thestatic.tv/dashboard](https://thestatic.tv/dashboard) to create your free API key.
 
-### 2. Install Dependencies
+**Key Types:**
+| Type | Prefix | Features |
+|------|--------|----------|
+| **Lite** | `dcls_` | Visitor tracking, session analytics |
+| **Full** | `dcls_` | Everything in Lite + Guide UI, Chat UI, heartbeat tracking, interactions |
+
+### 2. Add Your Key
+
+Open `src/index.ts` and find the configuration section at the top:
+
+```typescript
+// ╔═══════════════════════════════════════════════════════════════════════════╗
+// ║   >>> ENTER YOUR API KEY BELOW <<<                                        ║
+// ╚═══════════════════════════════════════════════════════════════════════════╝
+
+const YOUR_API_KEY = ''  // <========== PASTE YOUR KEY HERE
+```
+
+### 3. Run the Scene
 
 ```bash
 npm install
-```
-
-### 3. Configure Your Key
-
-Open `src/index.ts` and replace the placeholder:
-
-```typescript
-const SCENE_API_KEY = 'dcls_your_actual_key_here'
-```
-
-### 4. Run the Scene
-
-```bash
 npm start
 ```
 
-The scene will open in your browser. You should see:
-- The status orb turn **green** when connected
-- "SESSION: ACTIVE" text
-- Your visit tracked in your dashboard
+## What's in This Example
 
-## Scene Overview
+### Required SDK Code (Copy This!)
 
-```
-┌─────────────────────────────────┐
-│  ○                           ○  │  ← Corner pillars
-│                                 │
-│      ╔═════════════════════╗    │  ← Info panel (back wall)
-│      ║  KNOW YOUR AUDIENCE ║    │     "FREE TRIAL >> thestatic.tv"
-│      ╚═════════════════════╝    │
-│                                 │
-│ ┌────┐                          │
-│ │STATS│  ◇              ◇       │  ← Stats panel (left wall)
-│ │ 5  │       ● ← status orb     │     Shows live visitor count
-│ └────┘  ◇      (spawn)     ◇    │
-│                  ↓              │
-│                                 │
-│  ○                           ○  │
-└─────────────────────────────────┘
-```
+The example clearly marks what you need with `// >>> REQUIRED` comments:
 
-## SDK Usage
+1. **Import the SDK**
+   ```typescript
+   import { StaticTVClient, GuideVideo } from '@thestatic-tv/dcl-sdk'
+   ```
 
-The scene uses the **Lite SDK** for visitor tracking:
+2. **Create a Video Screen Entity**
+   ```typescript
+   const videoScreen = engine.addEntity()
+   ```
 
-```typescript
-import { StaticTVClient } from '@thestatic-tv/dcl-sdk'
+3. **Handle Video Selection**
+   ```typescript
+   function handleVideoSelect(video: GuideVideo) {
+     VideoPlayer.createOrReplace(videoScreen, {
+       src: video.src,
+       playing: true,
+       loop: true,
+       volume: 0.8
+     })
+   }
+   ```
 
-const staticTV = new StaticTVClient({
-  apiKey: 'dcls_your_key_here',
-  debug: true  // Shows console logs
-})
+4. **Initialize the Client**
+   ```typescript
+   const staticTV = new StaticTVClient({
+     apiKey: YOUR_API_KEY,
+     debug: true,
+     guideUI: { onVideoSelect: handleVideoSelect }
+   })
+   ```
 
-// Session tracking starts automatically!
-// Check session status:
-staticTV.session.isSessionActive()  // true/false
-```
+5. **Render UI Components**
+   ```typescript
+   ReactEcsRenderer.setUiRenderer(() => {
+     return ReactEcs.createElement(UiEntity, {
+       children: [
+         staticTV.guideUI?.getComponent(),
+         staticTV.chatUI?.getComponent()
+       ].filter(Boolean)
+     })
+   })
+   ```
 
-## What Gets Tracked
+### Demo-Only Code (Skip This)
 
-When visitors enter your scene, the SDK automatically tracks:
+Everything marked with `// --- DEMO` is just for this example scene - the fancy visuals, animations, stats panel, etc. You don't need any of it for your own integration.
 
-- **Unique Visitors** - How many different wallets visited
-- **Sessions** - Total visit count
-- **Time Spent** - Minutes visitors spent in your scene
+## SDK Features
 
-View your analytics at [thestatic.tv/dashboard](https://thestatic.tv/dashboard).
+### Lite Mode
+- **Session Tracking**: Automatic visitor counting
+- **Analytics**: View stats on your dashboard
+- **Zero UI**: Runs silently in the background
 
-## SDK Tiers
+### Full Mode (Upgrade Required)
+- **Guide UI**: Channel browser with live/scheduled content
+- **Chat UI**: Real-time chat with other viewers
+- **Heartbeat Tracking**: Know who's actually watching
+- **Interactions**: Like/follow channels
 
-| Feature | Lite ($5/mo) | Full ($10/mo) |
-|---------|--------------|---------------|
-| Session Tracking | ✅ | ✅ |
-| Visitor Analytics | ✅ | ✅ |
-| Video Streaming | ❌ | ✅ |
-| Channel Guide | ❌ | ✅ |
-| Interactions | ❌ | ✅ |
-
-## Scene Key vs Channel Key
-
-| Key Type | Prefix | Features | Who Can Use |
-|----------|--------|----------|-------------|
-| Scene Key | `dcls_` | Visitor tracking only | Everyone |
-| Channel Key | `dclk_` | Full guide, video, interactions | Channel owners |
-
-This example uses a **scene key** for basic visitor tracking. If you have a channel on thestatic.tv, you can use a **channel key** to add the full channel guide to your scene.
-
-## File Structure
+## Project Structure
 
 ```
 thestatic-dcl-example/
 ├── src/
-│   └── index.ts      # Main scene code
-├── scene.json        # DCL scene config
-├── package.json      # Dependencies
-├── tsconfig.json     # TypeScript config
-└── README.md
+│   ├── index.ts        # Main scene file (SDK integration here)
+│   └── demo-config.ts  # Internal demo configuration
+├── scene.json          # Decentraland scene metadata
+└── package.json        # Dependencies
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `npm start` | Run scene locally |
+| `npm start` | Run locally in preview mode |
 | `npm run build` | Build for production |
 | `npm run deploy` | Deploy to Decentraland |
-| `npm run deploy:test` | Deploy to test world |
+| `npm run deploy:test` | Deploy to test world server |
 
-## Customization
+## Local Development
 
-### Change Colors
-
-Edit the `COLORS` object in `src/index.ts`:
+For local API testing, set `IS_LOCAL = true` in `src/index.ts`:
 
 ```typescript
-const COLORS = {
-  cyan: Color4.create(0, 0.9, 0.9, 1),
-  // Add your brand colors...
-}
+const IS_LOCAL = true  // Uses localhost:3000 API
 ```
 
-### Add More Cubes
+## Resources
 
-Add positions to the `cubePositions` array:
+- [SDK Documentation](https://github.com/thestatic-tv/dcl-sdk)
+- [Get API Key](https://thestatic.tv/dashboard)
+- [TheStatic.tv](https://thestatic.tv)
+- [Decentraland SDK Docs](https://docs.decentraland.org)
 
-```typescript
-const cubePositions = [
-  { x: 3, z: 3 },
-  { x: 13, z: 3 },
-  // Add more...
-]
-```
+## Support
 
-## Troubleshooting
-
-**"Invalid API key" error**
-- Make sure you copied the full key including `dcls_` prefix
-- Check that your key hasn't been revoked in your dashboard
-
-**Session not tracking**
-- Enable `debug: true` to see console logs
-- Check browser console for errors
-- Verify network requests to `thestatic.tv/api/v1/dcl/scene-session`
-
-**Trial expired**
-- After 7 days, upgrade to continue tracking
-- Pricing: $5/mo (Lite) or $10/mo (Full)
-
-## Links
-
-- **SDK Package**: [npmjs.com/package/@thestatic-tv/dcl-sdk](https://npmjs.com/package/@thestatic-tv/dcl-sdk)
-- **Dashboard**: [thestatic.tv/dashboard](https://thestatic.tv/dashboard)
-
-## License
-
-MIT - Use this example as a starting point for your own scenes!
+Questions? Issues? Visit [thestatic.tv](https://thestatic.tv) or open an issue on GitHub.
