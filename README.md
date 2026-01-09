@@ -1,6 +1,6 @@
 # TheStatic.tv DCL SDK - Starter Example
 
-A complete example scene demonstrating how to integrate [@thestatic-tv/dcl-sdk](https://www.npmjs.com/package/@thestatic-tv/dcl-sdk) into your Decentraland scene.
+A minimal example scene demonstrating how to integrate [@thestatic-tv/dcl-sdk](https://www.npmjs.com/package/@thestatic-tv/dcl-sdk) into your Decentraland scene.
 
 ## Quick Start
 
@@ -16,14 +16,12 @@ Visit [thestatic.tv/dashboard](https://thestatic.tv/dashboard) to create your fr
 
 ### 2. Add Your Key
 
-Open `src/index.ts` and find the configuration section at the top:
+Open `src/index.ts` and replace the placeholder:
 
 ```typescript
-// ╔═══════════════════════════════════════════════════════════════════════════╗
-// ║   >>> ENTER YOUR API KEY BELOW <<<                                        ║
-// ╚═══════════════════════════════════════════════════════════════════════════╝
-
-const YOUR_API_KEY = ''  // <========== PASTE YOUR KEY HERE
+staticTV = new StaticTVClient({
+  apiKey: 'dcls_your_key_here'  // Replace with your key
+})
 ```
 
 ### 3. Run the Scene
@@ -33,58 +31,41 @@ npm install
 npm start
 ```
 
-## What's in This Example
+## Minimal Setup (Copy This!)
 
-### Required SDK Code (Copy This!)
+```typescript
+import {} from '@dcl/sdk/math'
+import { engine } from '@dcl/sdk/ecs'
+import ReactEcs, { ReactEcsRenderer, UiEntity } from '@dcl/sdk/react-ecs'
+import { StaticTVClient } from '@thestatic-tv/dcl-sdk'
 
-The example clearly marks what you need with `// >>> REQUIRED` comments:
+let staticTV: StaticTVClient
 
-1. **Import the SDK**
-   ```typescript
-   import { StaticTVClient, GuideVideo } from '@thestatic-tv/dcl-sdk'
-   ```
+export function main() {
+  staticTV = new StaticTVClient({
+    apiKey: 'dcls_your_key_here'  // Get from dashboard
+  })
 
-2. **Create a Video Screen Entity**
-   ```typescript
-   const videoScreen = engine.addEntity()
-   ```
+  // Init UI modules (Full mode only)
+  async function initUI() {
+    if (staticTV.guideUI) await staticTV.guideUI.init()
+    if (staticTV.chatUI) await staticTV.chatUI.init()
+  }
+  initUI()
+}
 
-3. **Handle Video Selection**
-   ```typescript
-   function handleVideoSelect(video: GuideVideo) {
-     VideoPlayer.createOrReplace(videoScreen, {
-       src: video.src,
-       playing: true,
-       loop: true,
-       volume: 0.8
-     })
-   }
-   ```
-
-4. **Initialize the Client**
-   ```typescript
-   const staticTV = new StaticTVClient({
-     apiKey: YOUR_API_KEY,
-     debug: true,
-     guideUI: { onVideoSelect: handleVideoSelect }
-   })
-   ```
-
-5. **Render UI Components**
-   ```typescript
-   ReactEcsRenderer.setUiRenderer(() => {
-     return ReactEcs.createElement(UiEntity, {
-       children: [
-         staticTV.guideUI?.getComponent(),
-         staticTV.chatUI?.getComponent()
-       ].filter(Boolean)
-     })
-   })
-   ```
-
-### Demo-Only Code (Skip This)
-
-Everything marked with `// --- DEMO` is just for this example scene - the fancy visuals, animations, stats panel, etc. You don't need any of it for your own integration.
+// UI renderer (outside main - required by DCL)
+ReactEcsRenderer.setUiRenderer(() => {
+  if (!staticTV) return null
+  return ReactEcs.createElement(UiEntity, {
+    uiTransform: { width: '100%', height: '100%', positionType: 'absolute' },
+    children: [
+      staticTV.guideUI?.getComponent(),
+      staticTV.chatUI?.getComponent()
+    ].filter(Boolean)
+  })
+})
+```
 
 ## SDK Features
 
@@ -104,10 +85,10 @@ Everything marked with `// --- DEMO` is just for this example scene - the fancy 
 ```
 thestatic-dcl-example/
 ├── src/
-│   ├── index.ts        # Main scene file (SDK integration here)
-│   └── demo-config.ts  # Internal demo configuration
-├── scene.json          # Decentraland scene metadata
-└── package.json        # Dependencies
+│   ├── index.ts       # Main entry point (SDK setup)
+│   └── demo-scene.ts  # Demo scene objects (optional)
+├── scene.json         # Decentraland scene metadata
+└── package.json       # Dependencies
 ```
 
 ## Commands
@@ -118,14 +99,6 @@ thestatic-dcl-example/
 | `npm run build` | Build for production |
 | `npm run deploy` | Deploy to Decentraland |
 | `npm run deploy:test` | Deploy to test world server |
-
-## Local Development
-
-For local API testing, set `IS_LOCAL = true` in `src/index.ts`:
-
-```typescript
-const IS_LOCAL = true  // Uses localhost:3000 API
-```
 
 ## Resources
 
